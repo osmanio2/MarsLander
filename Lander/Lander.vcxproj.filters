@@ -15,15 +15,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\GitHub\MarsLander\lander_graphics.cpp">
+    <ClCompile Include="..\lander_graphics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\GitHub\MarsLander\lander.cpp">
+    <ClCompile Include="..\lander.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\GitHub\MarsLander\lander.h">
+    <ClInclude Include="..\lander.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

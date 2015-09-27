@@ -78,14 +78,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\GitHub\MarsLander\lander.cpp" />
-    <ClCompile Include="..\..\..\..\GitHub\MarsLander\lander_graphics.cpp">
+    <ClCompile Include="..\lander.cpp" />
+    <ClCompile Include="..\lander_graphics.cpp">
       <UseFullPaths Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</UseFullPaths>
       <UseFullPaths Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</UseFullPaths>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\GitHub\MarsLander\lander.h" />
+    <ClInclude Include="..\lander.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
