@@ -400,3 +400,21 @@ void initialize_simulation (void)
 
   }
 }
+/*
+glBegin(GL_LINES);
+double xaxis = position.norm().x;
+double yaxis = position.norm().y;
+//glVertex3d(-2.0*s, 0.0, 0.0);
+glVertex3d(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
+glVertex3d(-2.0*yaxis*s, -2.0*xaxis*s, 0.0);
+glVertex3d(-(6*yaxis)*s, -6*xaxis*s, 0.0);
+glEnd();
+glPushMatrix();
+glTranslated(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
+glRotated(90.0, -xaxis, yaxis, 0.0);
+glutCone(-0.2*s, -0.5*s, 5, 5, true);
+glRotated(-90.0, -xaxis, yaxis, 0.0);
+double s2 = (yaxis < 0) ? 3 * s : s;
+glut_print(-1.25*s2*yaxis, -1.25*s*xaxis, "ground speed");
+glPopMatrix();
+*/
