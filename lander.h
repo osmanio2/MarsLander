@@ -176,7 +176,7 @@ double target_height;
 // any errors in the velocity update in numerical_dynamics
 vector3d position, orientation, velocity, velocity_from_positions, last_position;
 double climb_speed, ground_speed, altitude, throttle, fuel;
-bool stabilized_attitude, autopilot_enabled, parachute_lost, infinite_fuel, wind_flow;
+bool stabilized_attitude, autopilot_enabled, parachute_lost, infinite_fuel, wind_flow, wind_flow_gusts, planet_rotation, is_height;
 parachute_status_t parachute_status;
 int stabilized_attitude_angle;
 
@@ -193,7 +193,7 @@ GLfloat straight_on[] = { 0.0, 0.0, 1.0, 0.0 };
 
 #else // extern declarations of those global variables used in lander.cpp
 
-extern bool stabilized_attitude, autopilot_enabled, infinite_fuel, wind_flow;
+extern bool stabilized_attitude, autopilot_enabled, infinite_fuel, wind_flow, wind_flow_gusts, planet_rotation;
 extern double delta_t, simulation_time, throttle, fuel, ground_speed;
 extern unsigned short scenario;
 extern string scenario_description[];
@@ -226,6 +226,7 @@ double atmospheric_density (vector3d pos);
 void draw_dial (double cx, double cy, double val, string title, string units);
 void draw_control_bar (double tlx, double tly, double val, double red, double green, double blue, string title);
 void draw_indicator_lamp (double tcx, double tcy, string off_text, string on_text, bool on);
+void draw_indicator_lamp_custom(double tcx, double tcy, double width, double height, string off_text, string on_text, bool on);
 void draw_instrument_window (void);
 void display_help_arrows (void);
 void display_help_prompt (void);
@@ -258,3 +259,4 @@ void glut_key (unsigned char k, int x, int y);
 void rotation_control(vector3d up);
 void any_angle_control(double xAngle, double yAngle);
 void orbital_injection(void);
+vector3d mars_velocity(vector3d position);

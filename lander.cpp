@@ -17,6 +17,8 @@
 vector3d previous_position;
 bool update_first_pos = false;
 double tolerance = 5.0;
+double non_steady_wind_speed;
+int non_steady_wind_direction;
 int count_ = 0;
 bool calculated_required_velocity = false;
 bool reached_required_speed = false;
@@ -29,18 +31,20 @@ orbital_injection_states orbiting_state;
 void autopilot (void)
   // Autopilot to adjust the engine throttle, parachute and attitude control
 {
-  // INSERT YOUR CODE HERE
-
+ 
+	// Initialise some variables
 	vector3d er = position.norm();
 	double ascendRate = velocity * er;
 	vector3d tv = velocity - ascendRate*er;
 	ground_speed_ = tv.abs();
 
+	// check the target height for orbital injection
 	if (round(target_height) != 0) {
 		orbital_injection();
 		return;
 	}
 	if (!calculated_required_velocity) {
+		// Calculate the required velocity to leave an orbit
 		stabilized_attitude = true;
 		double ra = position.abs();
 		double rp = MARS_RADIUS + (EXOSPHERE/2);
@@ -48,12 +52,15 @@ void autopilot (void)
 		required_speed = sqrt(speed_sqr) - tolerance;
 		calculated_required_velocity = true;
 	}
+	// Initialist parameters to be used for the autopilot
 	static double previous_speed;
 	static double previous_error;
 	double Kh = 0.03;
 	double Kp = 0.5;
 	double range = 0.5;
 	double height = (position.abs() - MARS_RADIUS);
+
+	// If the fuel is infinite change modify some parameters
 	if (fuel >= 1.0) {
 		Kh = 0.01;
 		range = 0.6;
@@ -62,6 +69,7 @@ void autopilot (void)
 	double Pout;
 	if (count_ == 1) 
 	{
+		// Differential parameter to enhance the autopilot
 		Kp = Kp / (500 * abs(error - previous_error));
 		if ( (height < 10) || ( (abs(ascendRate) < 0.5) && height < 200 ) ) {
 			Kp = 0.5;
@@ -70,7 +78,7 @@ void autopilot (void)
 	}
 	
 	Pout = Kp * error;
-
+	// Autopilot controller
 	if (Pout <= -range) 
 	{
 		throttle = 0.0;
@@ -89,24 +97,26 @@ void autopilot (void)
 	if (count_ == 1) {
 		rate_check_to_deploy = (-(ascendRate + previous_speed) <= 0);
 	}
-	
+	// In orbit autopilot controller
 	if ((height > (EXOSPHERE - tolerance)) && !reached_required_speed && ground_speed_ >= required_speed) {
 		stabilized_attitude_angle = 270;
 		throttle = 1.0;
-	} else if (wind_flow) {
-			if ((height < 100.0) && (ground_speed > 1.0)) {
-				stabilized_attitude_angle = 315;
-			}
-			else {
+	} else {
+			// If for some reason the ground speed is greater than 1, maybe because of the steady wind flow
+			if ((height < 1000.0) && (height < (33.33 * ground_speed)) && (ground_speed > 1.0)) {
+				
+				bool ground_speed_positive = velocity * mars_velocity(position) >= 0.0;
+				stabilized_attitude_angle = ground_speed_positive ? 45 : 315;
+			
+			} else {
 				stabilized_attitude_angle = 0;
 			}
 		}
-	
 	if (!reached_required_speed && ground_speed_ < required_speed) {
 		stabilized_attitude_angle = 0;
 		reached_required_speed = true;
 	}
-
+	// Condition for deploying the parachute
 	if (safe_to_deploy_parachute() && parachute_status == NOT_DEPLOYED && (ascendRate < 0) && rate_check_to_deploy && ( height < (EXOSPHERE - tolerance) ) ) {
 
 		parachute_status = DEPLOYED;
@@ -255,25 +265,42 @@ void numerical_dynamics (void)
   // This is the function that performs the numerical integration to update the
   // lander's pose. The time step is delta_t (global variable).
 {
-  // INSERT YOUR CODE HERE
-	const static vector3d MARS_ANGULAR_VELOCITY = vector3d(0.0, 0.0, (2 * M_PI) / MARS_DAY);
+    // Infinite fuel is enabled
 	if(infinite_fuel) fuel = 1;
-	vector3d mars_velocity = MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm());
-	vector3d relative_velocity = velocity - mars_velocity;
+
+	// Calculate the relative velocity to be used for modelling the wind and plant's rotation
+	vector3d relative_velocity = velocity;
+	vector3d mars_rotational_velocity = mars_velocity(position);
+
+	// If the mechanics of the planet's rotation is enabled
+	if (planet_rotation) relative_velocity = velocity - mars_rotational_velocity;
+	
+	// Calculate the wind velocity if it's enabled
+	vector3d wind_velocity = vector3d(0,0,0);
 	if (wind_flow) {
-		vector3d wind_velocity = 10.0 * mars_velocity.norm();
-		relative_velocity -= wind_velocity;
+		// For steady flow used the average wind speed on Mars, i.e 10 m/s and in the same direction of the plant's rotation
+		wind_velocity = 10.0 * mars_rotational_velocity.norm();
 	}
+	else if (wind_flow_gusts) {
+		// For non-steady flow use a random direction and speed
+		wind_velocity = non_steady_wind_direction * non_steady_wind_speed * mars_rotational_velocity.norm();
+	}
+	relative_velocity -= wind_velocity;
+	// Calculate the lander mass
 	double lander_mass = UNLOADED_LANDER_MASS + (fuel * FUEL_CAPACITY * FUEL_DENSITY);
+
 	vector3d acceleration = -GRAVITY * MARS_MASS * (position.norm() / position.abs2());
+	// Calculate the drag force
 	vector3d lander_drag = -0.5*DRAG_COEF_LANDER*atmospheric_density(position)*M_PI*LANDER_SIZE*LANDER_SIZE*relative_velocity.abs2()*relative_velocity.norm();
 	if (parachute_status == DEPLOYED)
 	{
 		vector3d parachute_drag = -0.5*DRAG_COEF_CHUTE*atmospheric_density(position)*5.0*2.0*LANDER_SIZE*2.0*LANDER_SIZE*relative_velocity.abs2()*relative_velocity.norm();
 		lander_drag = lander_drag + parachute_drag;
 	}
+	// Calculate resultant acceleration
 	acceleration = acceleration + ((lander_drag + thrust_wrt_world()) / lander_mass);
 
+	// For the first time use Euler integrator,
 	if (!update_first_pos) 
 	{
 		previous_position = position;
@@ -281,7 +308,7 @@ void numerical_dynamics (void)
 		velocity = velocity + acceleration * delta_t;
 		update_first_pos = true;
 	}
-	else
+	else // Use Verlet integrator,
 	{
 		vector3d temp = position;
 		position = (2 * position) - previous_position + (delta_t * delta_t * acceleration);
@@ -316,7 +343,16 @@ void initialize_simulation (void)
   scenario_description[7] = "";
   scenario_description[8] = "";
   scenario_description[9] = "";
+
+  // Randomness for non-steady wind flow
+  double random = rand();
+  non_steady_wind_direction = ((random / RAND_MAX) >= 0.5) ? 1 : -1;
+  random = rand();
+  non_steady_wind_speed = (random / RAND_MAX) * 30.0;
+  // Initialise all variables needed
+  planet_rotation = true;
   wind_flow = false;
+  wind_flow_gusts = false;
   infinite_fuel = false;
   orbiting_state = in_orbit;
   target_height = 0.0;
@@ -397,7 +433,7 @@ void initialize_simulation (void)
     break;
 
   case 6:
-	 
+	  // a circular areostationary orbit
 	  position = vector3d(raduis, 0.0, 0.0);
 	  velocity = vector3d(0.0, speed, 0.0);
 	  orientation = vector3d(0.0, 90.0, 0.0);
@@ -419,21 +455,3 @@ void initialize_simulation (void)
 
   }
 }
-/*
-glBegin(GL_LINES);
-double xaxis = position.norm().x;
-double yaxis = position.norm().y;
-//glVertex3d(-2.0*s, 0.0, 0.0);
-glVertex3d(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
-glVertex3d(-2.0*yaxis*s, -2.0*xaxis*s, 0.0);
-glVertex3d(-(6*yaxis)*s, -6*xaxis*s, 0.0);
-glEnd();
-glPushMatrix();
-glTranslated(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
-glRotated(90.0, -xaxis, yaxis, 0.0);
-glutCone(-0.2*s, -0.5*s, 5, 5, true);
-glRotated(-90.0, -xaxis, yaxis, 0.0);
-double s2 = (yaxis < 0) ? 3 * s : s;
-glut_print(-1.25*s2*yaxis, -1.25*s*xaxis, "ground speed");
-glPopMatrix();
-*/

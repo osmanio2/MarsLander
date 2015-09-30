@@ -673,6 +673,26 @@ void draw_indicator_lamp (double tcx, double tcy, string off_text, string on_tex
   else glut_print(tcx-70.0, tcy-14.0, off_text);
 }
 
+void draw_indicator_lamp_custom(double tcx, double tcy, double width, double height, string off_text, string on_text, bool on) {
+	if (on) glColor3f(0.5, 0.0, 0.0);
+	else glColor3f(0.0, 0.5, 0.0);
+	glBegin(GL_QUADS);
+	glVertex2d(tcx - (width / 2.0) + 0.5, tcy - height - 0.5);
+	glVertex2d(tcx + (width / 2.0) - 0.5, tcy - height - 0.5);
+	glVertex2d(tcx + (width / 2.0) - 0.5, tcy - 0.5);
+	glVertex2d(tcx - (width / 2.0) + 0.5, tcy - 0.5);
+	glEnd();
+	glColor3f(1.0, 1.0, 1.0);
+	glBegin(GL_LINE_LOOP);
+	glVertex2d(tcx - (width / 2.0), tcy - height);
+	glVertex2d(tcx + (width / 2.0), tcy - height);
+	glVertex2d(tcx + (width / 2.0), tcy);
+	glVertex2d(tcx - (width / 2.0), tcy);
+	glEnd();
+	if (on) glut_print(tcx - (width / 2.0) + 5.0, tcy - height + 6.0, on_text);
+	else glut_print(tcx - (width / 2.0) + 5.0, tcy - height + 6.0, off_text);
+}
+
 void draw_instrument_window (void)
   // Draws the instruments
 {
@@ -689,7 +709,19 @@ void draw_instrument_window (void)
   draw_indicator_lamp (view_width+GAP-400, INSTRUMENT_HEIGHT-18, "Auto-pilot off", "Auto-pilot on", autopilot_enabled);
 
   // Draw infinite fuel lamp
-  draw_indicator_lamp(view_width + GAP + 314, INSTRUMENT_HEIGHT - 64, "Infinite fuel off", "Infinite fuel  on", infinite_fuel);
+  draw_indicator_lamp_custom(view_width + GAP + 295, INSTRUMENT_HEIGHT - 64, 110.0, 20.0, "Infinite fuel off", "Infinite fuel on", infinite_fuel);
+
+  // Draw planet rotation lamp
+  draw_indicator_lamp_custom(view_width + GAP + 425, INSTRUMENT_HEIGHT - 64, 110.0, 20.0, "Planet rotation off", "Planet rotation on", planet_rotation);
+
+  // Draw target height lamp
+  draw_indicator_lamp_custom(view_width + GAP + 425, INSTRUMENT_HEIGHT - 143, 110.0, 20.0, "Target height off", "Target height on", is_height);
+
+  // Draw steady wind lamp
+  draw_indicator_lamp_custom(view_width + GAP + 295, INSTRUMENT_HEIGHT - 215, 110.0, 20.0, "Steady wind off", "Steady wind on", wind_flow);
+
+  // Draw non steady wind lamp
+  draw_indicator_lamp_custom(view_width + GAP + 425, INSTRUMENT_HEIGHT - 215, 110.0, 20.0, "Non-steady wind off", "Non-steady wind on", wind_flow_gusts);
 
   // Draw climb rate meter
   if (climb_speed >= 0.0) draw_dial (view_width+GAP-150, INSTRUMENT_HEIGHT/2, landed ? 0.0 : climb_speed, "Climb rate", "m/s");
@@ -824,8 +856,44 @@ void display_help_arrows (void)
     glRotated(-90.0, 0.0, 1.0, 0.0);
     glut_print(0.0, 1.25*s, "ground speed");
     glPopMatrix();
-  }
+  } 
 
+  // X-axis arrow
+  glColor3f(1.0, 1.0, 0.0);
+  glBegin(GL_LINES);
+  double xaxis = position.norm().x;
+  double yaxis = position.norm().y;
+  //glVertex3d(-2.0*s, 0.0, 0.0);
+  glVertex3d(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
+  glVertex3d(-2.0*yaxis*s, -2.0*xaxis*s, 0.0);
+  glVertex3d(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
+  glEnd();
+  glPushMatrix();
+  glTranslated(-6*yaxis*s, -6 * xaxis*s, 0.0);
+  glRotated(90.0, -xaxis, yaxis, 0.0);
+  glutCone(-0.2*s, -0.5*s, 5, 5, true);
+  glRotated(-90.0, -xaxis, yaxis, 0.0);
+  double s2 = (yaxis < 0) ? 3 * s : s;
+  glut_print(-1.25*s2*yaxis, -1.25*s*xaxis, "x-axis");
+  glPopMatrix();
+
+  // Y-axis arrow
+  glBegin(GL_LINES);
+  yaxis = -position.norm().x;
+  xaxis = position.norm().y;
+  //glVertex3d(-2.0*s, 0.0, 0.0);
+  glVertex3d(-6*yaxis*s, -6 * xaxis*s, 0.0);
+  glVertex3d(-2.0*yaxis*s, -2.0*xaxis*s, 0.0);
+  glVertex3d(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
+  glEnd();
+  glPushMatrix();
+  glTranslated(-(6 * yaxis)*s, -6 * xaxis*s, 0.0);
+  glRotated(90.0, -xaxis, yaxis, 0.0);
+  glutCone(-0.2*s, -0.5*s, 5, 5, true);
+  glRotated(-90.0, -xaxis, yaxis, 0.0);
+  s2 = (yaxis < 0) ? 3 * s : s;
+  glut_print(-1.25*s2*yaxis, -1.25*s*xaxis, "y-axis");
+  glPopMatrix();
   glEnable(GL_LIGHTING);
 }
 
@@ -860,14 +928,15 @@ void display_help_text (void)
   glut_print(20, view_height-140, "Middle/shift mouse or up wheel - zoom in 3D views");
   glut_print(20, view_height-155, "Right mouse or down wheel - zoom out 3D views");
 
-  glut_print(20, view_height-175, "s - toggle attitude stabilizer");
-  glut_print(20, view_height-190, "p - deploy parachute");
+  glut_print(20, view_height-175, "s - toggle attitude stabilizer | f - toggle infinite fuel");
+  glut_print(20, view_height-190, "p - deploy parachute | v/b - toggle non/steady wind flow");
   glut_print(20, view_height-205, "a - toggle autopilot");
 
-  glut_print(20, view_height-225, "l - toggle lighting model");
-  glut_print(20, view_height-240, "t - toggle terrain texture");
-  glut_print(20, view_height-255, "h - toggle help");
-  glut_print(20, view_height-270, "Esc/q - quit");
+  glut_print(20, view_height-225, "l - toggle lighting model | t - toggle terrain texture");
+  glut_print(20, view_height - 240, "h - toggle help | r - toggle the mechanics of the planet's rotation");
+  glut_print(20, view_height - 255, "n - toggle target height to start typing the target height for orbital injection");
+  glut_print(20, view_height - 270, "m - rotate the lander using manual any-angle control, taking the angle from the close-up view");
+  glut_print(20, view_height - 285, "Esc/q - quit");
 
   j = 0;
   for (i=0; i<10; i++) {
@@ -1512,7 +1581,7 @@ bool safe_to_deploy_parachute (void)
   // Checks whether the parachute is safe to deploy at the current position and velocity
 {
   double drag;
-  vector3d relative_velocity = velocity_from_positions - (MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm()));
+  vector3d relative_velocity = velocity_from_positions - mars_velocity(position);
   // Assume high Reynolds number, quadratic drag = -0.5 * rho * v^2 * A * C_d
   drag = 0.5*DRAG_COEF_CHUTE*atmospheric_density(position)*5.0*2.0*LANDER_SIZE*2.0*LANDER_SIZE*relative_velocity.abs2();
   // Do not use the global variable "altitude" here, in case this function is called from within the
@@ -1538,8 +1607,8 @@ void update_visualization (void)
   else velocity_from_positions = vector3d(0.0, 0.0, 0.0);
   climb_speed = velocity_from_positions*av_p; 
   vector3d original_ground_speed = velocity_from_positions - climb_speed*av_p;
-  vector3d mars_rotational_velocity = MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm());
-  ground_speed = (original_ground_speed - mars_rotational_velocity).abs();
+  ground_speed = original_ground_speed.abs();
+  if (planet_rotation) ground_speed = (original_ground_speed - mars_velocity(position)).abs();
 
   // Check to see whether the lander has landed
   if (altitude < LANDER_SIZE/2.0) {
@@ -1625,6 +1694,10 @@ void attitude_stabilization (void)
   orientation = matrix_to_xyz_euler(m);
 }
 
+vector3d mars_velocity(vector3d current_position) {
+	return MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * current_position.norm());
+}
+
 vector3d thrust_wrt_world (void)
   // Works out thrust vector in the world reference frame, given the lander's orientation
 {
@@ -1702,6 +1775,8 @@ void reset_simulation (void)
   vector3d p, tv;
   unsigned long i;
 
+  is_height = false;
+
   // Reset these three lander parameters here, so they can be overwritten in initialize_simulation() if so desired
   stabilized_attitude_angle = 0;
   throttle = 0.0;
@@ -1726,8 +1801,9 @@ void reset_simulation (void)
   p = position.norm();
   climb_speed = velocity_from_positions*p;
   tv = velocity_from_positions - climb_speed*p;
-  vector3d mars_rotational_velocity = MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm());
-  ground_speed = (tv - mars_rotational_velocity).abs();
+  vector3d mars_rotational_velocity = mars_velocity(position);
+  ground_speed = tv.abs();
+  if(planet_rotation) ground_speed = (tv - mars_rotational_velocity).abs();
 
   // Miscellaneous state variables
   throttle_control = (short)(throttle*THROTTLE_GRANULARITY + 0.5);
@@ -1952,9 +2028,9 @@ void glut_special (int key, int x, int y)
 void glut_key (unsigned char k, int x, int y)
   // Callback for key presses in all windows
 {
-	static bool is_height = false;
 	if (k == 'n' || k == 'N') {
 		is_height = !is_height;
+		if (paused) refresh_all_subwindows();
 	}
 
 	if (is_height) {
@@ -1964,6 +2040,8 @@ void glut_key (unsigned char k, int x, int y)
 			int value = k - '0';
 			if (value >= 0 && value <= 9) {
 				target_height = (target_height * 10) + value;
+				if (target_height > 99999999) target_height = 99999999;
+				if (paused) refresh_all_subwindows();
 			}
 		}
 		
@@ -2043,10 +2121,13 @@ void glut_key (unsigned char k, int x, int y)
 
 		case 'b': case 'B': 
 			wind_flow = !wind_flow;
+			wind_flow_gusts = (wind_flow_gusts && !wind_flow);
+			if (paused) refresh_all_subwindows();
 			break;
 
 		case 'f': case 'F':
 			infinite_fuel = !infinite_fuel;
+			if (paused) refresh_all_subwindows();
 			break;
 
 		case 'h': case 'H':
@@ -2064,13 +2145,6 @@ void glut_key (unsigned char k, int x, int y)
 			if (paused || landed) refresh_all_subwindows();
 			break;
 
-		case 'm': case 'M': {
-			double xAngle = -(closeup_xr + 90.0);
-			double yAngle = -closeup_yr;
-			any_angle_control(xAngle, yAngle);
-			break;
-		}
-
 		case 'l': case 'L':
 			// l or L - toggle lighting model
 			static_lighting = !static_lighting;
@@ -2078,6 +2152,14 @@ void glut_key (unsigned char k, int x, int y)
 			glutSetWindow(closeup_window); enable_lights();
 			if (paused || landed) refresh_all_subwindows();
 			break;
+		
+		case 'm': case 'M': {
+			double xAngle = -(closeup_xr + 90.0);
+			double yAngle = -closeup_yr;
+			any_angle_control(xAngle, yAngle);
+			if (paused) refresh_all_subwindows();
+			break;
+		}
 
 		case 't': case 'T':
 			// t or T - terrain texture
@@ -2098,6 +2180,16 @@ void glut_key (unsigned char k, int x, int y)
 			if (paused) refresh_all_subwindows();
 			break;
 
+		case 'r': case 'R':
+			planet_rotation = !planet_rotation;
+			if (paused) refresh_all_subwindows();
+			break;
+
+		case 'v': case 'V':
+			wind_flow_gusts = !wind_flow_gusts;
+			wind_flow = (wind_flow && !wind_flow_gusts);
+			if (paused) refresh_all_subwindows();
+			break;
 		case 32:
 			// space bar
 			simulation_speed = 0;
