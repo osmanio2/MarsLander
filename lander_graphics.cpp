@@ -77,6 +77,8 @@
 #define DECLARE_GLOBAL_VARIABLES
 #include "lander.h"
 
+const static vector3d MARS_ANGULAR_VELOCITY = vector3d(0.0, 0.0, (2 * M_PI) / MARS_DAY);
+
 void invert (double m[], double mout[])
   // Inverts a 4x4 OpenGL rotation matrix
 {
@@ -1510,12 +1512,12 @@ bool safe_to_deploy_parachute (void)
   // Checks whether the parachute is safe to deploy at the current position and velocity
 {
   double drag;
-
+  vector3d relative_velocity = velocity_from_positions - (MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm()));
   // Assume high Reynolds number, quadratic drag = -0.5 * rho * v^2 * A * C_d
-  drag = 0.5*DRAG_COEF_CHUTE*atmospheric_density(position)*5.0*2.0*LANDER_SIZE*2.0*LANDER_SIZE*velocity_from_positions.abs2();
+  drag = 0.5*DRAG_COEF_CHUTE*atmospheric_density(position)*5.0*2.0*LANDER_SIZE*2.0*LANDER_SIZE*relative_velocity.abs2();
   // Do not use the global variable "altitude" here, in case this function is called from within the
   // numerical_dynamics function, before altitude is updated in the update_visualization function
-  if ((drag > MAX_PARACHUTE_DRAG) || ((velocity_from_positions.abs() > MAX_PARACHUTE_SPEED) && ((position.abs() - MARS_RADIUS) < EXOSPHERE))) return false;
+  if ((drag > MAX_PARACHUTE_DRAG) || ((relative_velocity.abs() > MAX_PARACHUTE_SPEED) && ((position.abs() - MARS_RADIUS) < EXOSPHERE))) return false;
   else return true;
 }
 
@@ -1534,8 +1536,10 @@ void update_visualization (void)
   av_p = (position + last_position).norm();
   if (delta_t != 0.0) velocity_from_positions = (position - last_position)/delta_t;
   else velocity_from_positions = vector3d(0.0, 0.0, 0.0);
-  climb_speed = velocity_from_positions*av_p;
-  ground_speed = (velocity_from_positions - climb_speed*av_p).abs();
+  climb_speed = velocity_from_positions*av_p; 
+  vector3d original_ground_speed = velocity_from_positions - climb_speed*av_p;
+  vector3d mars_rotational_velocity = MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm());
+  ground_speed = (original_ground_speed - mars_rotational_velocity).abs();
 
   // Check to see whether the lander has landed
   if (altitude < LANDER_SIZE/2.0) {
@@ -1722,7 +1726,8 @@ void reset_simulation (void)
   p = position.norm();
   climb_speed = velocity_from_positions*p;
   tv = velocity_from_positions - climb_speed*p;
-  ground_speed = tv.abs();
+  vector3d mars_rotational_velocity = MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm());
+  ground_speed = (tv - mars_rotational_velocity).abs();
 
   // Miscellaneous state variables
   throttle_control = (short)(throttle*THROTTLE_GRANULARITY + 0.5);
@@ -2036,6 +2041,14 @@ void glut_key (unsigned char k, int x, int y)
 			if (paused) refresh_all_subwindows();
 			break;
 
+		case 'b': case 'B': 
+			wind_flow = !wind_flow;
+			break;
+
+		case 'f': case 'F':
+			infinite_fuel = !infinite_fuel;
+			break;
+
 		case 'h': case 'H':
 			// h or H - help
 			if (help) {
@@ -2050,6 +2063,13 @@ void glut_key (unsigned char k, int x, int y)
 			set_orbital_projection_matrix();
 			if (paused || landed) refresh_all_subwindows();
 			break;
+
+		case 'm': case 'M': {
+			double xAngle = -(closeup_xr + 90.0);
+			double yAngle = -closeup_yr;
+			any_angle_control(xAngle, yAngle);
+			break;
+		}
 
 		case 'l': case 'L':
 			// l or L - toggle lighting model
@@ -2086,14 +2106,7 @@ void glut_key (unsigned char k, int x, int y)
 			else refresh_all_subwindows();
 			paused = true;
 			break;
-		case 'f': case 'F':
-			infinite_fuel = !infinite_fuel;
-			break;
-		case 'm': case 'M':
-			double xAngle = -(closeup_xr + 90.0);
-			double yAngle = -closeup_yr;
-			any_angle_control(xAngle, yAngle);
-			break;
+		
 		}
 	}
 }

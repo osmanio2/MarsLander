@@ -21,6 +21,7 @@ int count_ = 0;
 bool calculated_required_velocity = false;
 bool reached_required_speed = false;
 double required_speed;
+double ground_speed_;
 enum orbital_injection_states {in_orbit, leaving_orbit, changing_orbit, entering_orbit};
 
 orbital_injection_states orbiting_state;
@@ -29,6 +30,12 @@ void autopilot (void)
   // Autopilot to adjust the engine throttle, parachute and attitude control
 {
   // INSERT YOUR CODE HERE
+
+	vector3d er = position.norm();
+	double ascendRate = velocity * er;
+	vector3d tv = velocity - ascendRate*er;
+	ground_speed_ = tv.abs();
+
 	if (round(target_height) != 0) {
 		orbital_injection();
 		return;
@@ -43,13 +50,10 @@ void autopilot (void)
 	}
 	static double previous_speed;
 	static double previous_error;
-	//static int count;
-	double Kh = 0.05;
+	double Kh = 0.03;
 	double Kp = 0.5;
 	double range = 0.5;
 	double height = (position.abs() - MARS_RADIUS);
-	vector3d er = position.norm();
-	double ascendRate = velocity * er;
 	if (fuel >= 1.0) {
 		Kh = 0.01;
 		range = 0.6;
@@ -86,12 +90,19 @@ void autopilot (void)
 		rate_check_to_deploy = (-(ascendRate + previous_speed) <= 0);
 	}
 	
-	if ((height > (EXOSPHERE - tolerance)) && !reached_required_speed && ground_speed >= required_speed) {
+	if ((height > (EXOSPHERE - tolerance)) && !reached_required_speed && ground_speed_ >= required_speed) {
 		stabilized_attitude_angle = 270;
 		throttle = 1.0;
-	}
+	} else if (wind_flow) {
+			if ((height < 100.0) && (ground_speed > 1.0)) {
+				stabilized_attitude_angle = 315;
+			}
+			else {
+				stabilized_attitude_angle = 0;
+			}
+		}
 	
-	if (!reached_required_speed && ground_speed < required_speed) {
+	if (!reached_required_speed && ground_speed_ < required_speed) {
 		stabilized_attitude_angle = 0;
 		reached_required_speed = true;
 	}
@@ -133,11 +144,11 @@ void orbital_injection(void) {
 			angle_offset = -45;
 		}
 		stabilized_attitude_angle = 90 + angle_offset;
-		if (ground_speed >= required_speed) {
+		if (ground_speed_ >= required_speed) {
 			stabilized_attitude_angle = 270 - angle_offset;
 		}
 		throttle = 1.0;
-		if (required_speed < (ground_speed + 0.5) && required_speed > (ground_speed - 0.5)) {
+		if (required_speed < (ground_speed_ + 0.5) && required_speed > (ground_speed_ - 0.5)) {
 			throttle = 0.0;
 			stabilized_attitude_angle = 0;
 			stabilized_attitude = false;
@@ -156,7 +167,7 @@ void orbital_injection(void) {
 		double error = 0.0;
 		if (target_height > height) 
 		{
-			error = (required_final_speed * (height / target_height)) - ground_speed;
+			error = (required_final_speed * (height / target_height)) - ground_speed_;
 			stabilized_attitude = true;
 			double target_rate = (target_height - height) / 12.0;
 			if (abs(target_rate) < 0.5) {
@@ -172,7 +183,7 @@ void orbital_injection(void) {
 				orient = -45;
 			}
 			stabilized_attitude_angle = 90 + orient;
-			if (ground_speed >= required_final_speed) {
+			if (ground_speed_ >= required_final_speed) {
 				stabilized_attitude_angle = 270 - orient;
 			}
 			double Pout = k * error;
@@ -192,7 +203,7 @@ void orbital_injection(void) {
 		}
 		else
 		{
-			error = (required_final_speed * (target_height / height)) - ground_speed;
+			error = (required_final_speed * (target_height / height)) - ground_speed_;
 			stabilized_attitude = true;
 			double target_rate = (target_height - height) / 12.0;
 			if (abs(target_rate) < 0.5) {
@@ -208,7 +219,7 @@ void orbital_injection(void) {
 				orient = -45;
 			}
 			stabilized_attitude_angle = 90 + orient;
-			if (ground_speed >= required_final_speed) {
+			if (ground_speed_ >= required_final_speed) {
 				stabilized_attitude_angle = 270 - orient;
 			}
 			double Pout = k * error;
@@ -245,13 +256,20 @@ void numerical_dynamics (void)
   // lander's pose. The time step is delta_t (global variable).
 {
   // INSERT YOUR CODE HERE
+	const static vector3d MARS_ANGULAR_VELOCITY = vector3d(0.0, 0.0, (2 * M_PI) / MARS_DAY);
 	if(infinite_fuel) fuel = 1;
+	vector3d mars_velocity = MARS_ANGULAR_VELOCITY ^ (MARS_RADIUS * position.norm());
+	vector3d relative_velocity = velocity - mars_velocity;
+	if (wind_flow) {
+		vector3d wind_velocity = 10.0 * mars_velocity.norm();
+		relative_velocity -= wind_velocity;
+	}
 	double lander_mass = UNLOADED_LANDER_MASS + (fuel * FUEL_CAPACITY * FUEL_DENSITY);
 	vector3d acceleration = -GRAVITY * MARS_MASS * (position.norm() / position.abs2());
-	vector3d lander_drag = -0.5*DRAG_COEF_LANDER*atmospheric_density(position)*M_PI*LANDER_SIZE*LANDER_SIZE*velocity.abs2()*velocity.norm();
+	vector3d lander_drag = -0.5*DRAG_COEF_LANDER*atmospheric_density(position)*M_PI*LANDER_SIZE*LANDER_SIZE*relative_velocity.abs2()*relative_velocity.norm();
 	if (parachute_status == DEPLOYED)
 	{
-		vector3d parachute_drag = -0.5*DRAG_COEF_CHUTE*atmospheric_density(position)*5.0*2.0*LANDER_SIZE*2.0*LANDER_SIZE*velocity.abs2()*velocity.norm();
+		vector3d parachute_drag = -0.5*DRAG_COEF_CHUTE*atmospheric_density(position)*5.0*2.0*LANDER_SIZE*2.0*LANDER_SIZE*relative_velocity.abs2()*relative_velocity.norm();
 		lander_drag = lander_drag + parachute_drag;
 	}
 	acceleration = acceleration + ((lander_drag + thrust_wrt_world()) / lander_mass);
@@ -298,6 +316,7 @@ void initialize_simulation (void)
   scenario_description[7] = "";
   scenario_description[8] = "";
   scenario_description[9] = "";
+  wind_flow = false;
   infinite_fuel = false;
   orbiting_state = in_orbit;
   target_height = 0.0;
